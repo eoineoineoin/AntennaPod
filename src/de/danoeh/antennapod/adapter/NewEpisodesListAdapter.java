@@ -5,9 +5,14 @@ import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.*;
+import android.widget.BaseAdapter;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+
 import de.danoeh.antennapod.R;
-import de.danoeh.antennapod.asynctask.ImageLoader;
+import de.danoeh.antennapod.asynctask.PicassoProvider;
 import de.danoeh.antennapod.feed.FeedItem;
 import de.danoeh.antennapod.feed.FeedMedia;
 import de.danoeh.antennapod.storage.DownloadRequester;
@@ -62,7 +67,7 @@ public class NewEpisodesListAdapter extends BaseAdapter {
             LayoutInflater inflater = (LayoutInflater) context
                     .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             convertView = inflater.inflate(R.layout.new_episodes_listitem,
-                    null);
+                    parent, false);
             holder.title = (TextView) convertView.findViewById(R.id.txtvTitle);
             holder.pubDate = (TextView) convertView
                     .findViewById(R.id.txtvPublished);
@@ -124,13 +129,11 @@ public class NewEpisodesListAdapter extends BaseAdapter {
         holder.butSecondary.setTag(item);
         holder.butSecondary.setOnClickListener(secondaryActionListener);
 
+        PicassoProvider.getMediaMetadataPicassoInstance(context)
+                .load(item.getImageUri())
+                .fit()
+                .into(holder.imageView);
 
-        ImageLoader.getInstance().loadThumbnailBitmap(
-                item,
-                holder.imageView,
-                (int) convertView.getResources().getDimension(
-                        R.dimen.thumbnail_length)
-        );
         return convertView;
     }
 

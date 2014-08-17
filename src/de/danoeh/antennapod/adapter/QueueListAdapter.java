@@ -6,7 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
 import de.danoeh.antennapod.R;
-import de.danoeh.antennapod.asynctask.ImageLoader;
+import de.danoeh.antennapod.asynctask.PicassoProvider;
 import de.danoeh.antennapod.feed.FeedItem;
 import de.danoeh.antennapod.feed.FeedMedia;
 import de.danoeh.antennapod.storage.DownloadRequester;
@@ -22,13 +22,13 @@ public class QueueListAdapter extends BaseAdapter {
     private final ActionButtonCallback actionButtonCallback;
     private final ActionButtonUtils actionButtonUtils;
 
+
     public QueueListAdapter(Context context, ItemAccess itemAccess, ActionButtonCallback actionButtonCallback) {
         super();
         this.context = context;
         this.itemAccess = itemAccess;
         this.actionButtonUtils = new ActionButtonUtils(context);
         this.actionButtonCallback = actionButtonCallback;
-
     }
 
     @Override
@@ -57,7 +57,7 @@ public class QueueListAdapter extends BaseAdapter {
             LayoutInflater inflater = (LayoutInflater) context
                     .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             convertView = inflater.inflate(R.layout.queue_listitem,
-                    null);
+                    parent, false);
             holder.title = (TextView) convertView.findViewById(R.id.txtvTitle);
             holder.butSecondary = (ImageButton) convertView
                     .findViewById(R.id.butSecondaryAction);
@@ -92,13 +92,11 @@ public class QueueListAdapter extends BaseAdapter {
         holder.butSecondary.setTag(item);
         holder.butSecondary.setOnClickListener(secondaryActionListener);
 
+        PicassoProvider.getMediaMetadataPicassoInstance(context)
+                .load(item.getImageUri())
+                .fit()
+                .into(holder.imageView);
 
-        ImageLoader.getInstance().loadThumbnailBitmap(
-                item,
-                holder.imageView,
-                (int) convertView.getResources().getDimension(
-                        R.dimen.thumbnail_length)
-        );
         return convertView;
     }
 

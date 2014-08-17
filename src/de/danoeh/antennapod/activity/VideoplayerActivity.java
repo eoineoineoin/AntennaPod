@@ -8,12 +8,17 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Pair;
-import android.view.*;
+import android.view.MotionEvent;
+import android.view.SurfaceHolder;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
+
 import de.danoeh.antennapod.BuildConfig;
 import de.danoeh.antennapod.R;
 import de.danoeh.antennapod.feed.MediaType;
@@ -45,6 +50,7 @@ public class VideoplayerActivity extends MediaplayerActivity {
         setTheme(R.style.Theme_AntennaPod_Dark);
     }
 
+    @SuppressLint("AppCompatMethod")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (Build.VERSION.SDK_INT >= 11) {
@@ -126,7 +132,8 @@ public class VideoplayerActivity extends MediaplayerActivity {
 
             Pair<Integer, Integer> videoSize = controller.getVideoSize();
             if (videoSize != null && videoSize.first > 0 && videoSize.second > 0) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "Width,height of video: " + videoSize.first + ", " + videoSize.second);
+                if (BuildConfig.DEBUG)
+                    Log.d(TAG, "Width,height of video: " + videoSize.first + ", " + videoSize.second);
                 videoview.setVideoSize(videoSize.first, videoSize.second);
             } else {
                 Log.e(TAG, "Could not determine video size");
@@ -304,6 +311,7 @@ public class VideoplayerActivity extends MediaplayerActivity {
         progressIndicator.setVisibility(View.INVISIBLE);
     }
 
+    @SuppressLint("NewApi")
     private void showVideoControls() {
         videoOverlay.setVisibility(View.VISIBLE);
         butPlay.setVisibility(View.VISIBLE);
@@ -318,6 +326,7 @@ public class VideoplayerActivity extends MediaplayerActivity {
         }
     }
 
+    @SuppressLint("NewApi")
     private void hideVideoControls() {
         final Animation animation = AnimationUtils.loadAnimation(this,
                 R.anim.fade_out);

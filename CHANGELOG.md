@@ -1,6 +1,21 @@
 Change Log
 ==========
 
+Version 0.9.9.3
+---------------
+* Fixed video playback problems
+* Improved image loading
+* Other bugfixes and improvements
+
+Version 0.9.9.2
+---------------
+* Added support for feed discovery if a website URL is entered
+* Added support for 'next'/'previous' media keys
+* Improved sleep timer
+* Timestamps in shownotes can now be used to jump to a specific position
+* Automatic Flattring is now configurable
+* Several bugfixes and improvements
+
 Version 0.9.9.1
 ---------------
 * Several bugfixes and improvements

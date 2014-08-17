@@ -4,7 +4,12 @@ import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.*;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.AudioManager;
@@ -22,11 +27,18 @@ import android.util.Log;
 import android.util.Pair;
 import android.view.KeyEvent;
 import android.view.SurfaceHolder;
+import android.widget.Toast;
+
+import org.apache.commons.lang3.StringUtils;
+
+import java.io.IOException;
+import java.util.List;
+
 import de.danoeh.antennapod.BuildConfig;
-import de.danoeh.antennapod.PodcastApp;
 import de.danoeh.antennapod.R;
 import de.danoeh.antennapod.activity.AudioplayerActivity;
 import de.danoeh.antennapod.activity.VideoplayerActivity;
+import de.danoeh.antennapod.asynctask.PicassoProvider;
 import de.danoeh.antennapod.feed.Chapter;
 import de.danoeh.antennapod.feed.FeedItem;
 import de.danoeh.antennapod.feed.FeedMedia;
@@ -37,13 +49,9 @@ import de.danoeh.antennapod.receiver.MediaButtonReceiver;
 import de.danoeh.antennapod.receiver.PlayerWidget;
 import de.danoeh.antennapod.storage.DBTasks;
 import de.danoeh.antennapod.storage.DBWriter;
-import de.danoeh.antennapod.util.BitmapDecoder;
 import de.danoeh.antennapod.util.QueueAccess;
 import de.danoeh.antennapod.util.flattr.FlattrUtils;
 import de.danoeh.antennapod.util.playback.Playable;
-import de.danoeh.antennapod.util.playback.PlaybackController;
-
-import java.util.List;
 
 /**
  * Controls the MediaPlayer that plays a FeedMedia-file
@@ -253,7 +261,8 @@ public class PlaybackService extends Service {
         }
 
         if ((flags & Service.START_FLAG_REDELIVERY) != 0) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "onStartCommand is a redelivered intent, calling stopForeground now.");
+            if (BuildConfig.DEBUG)
+                Log.d(TAG, "onStartCommand is a redelivered intent, calling stopForeground now.");
             stopForeground(true);
         } else {
 
@@ -282,7 +291,8 @@ public class PlaybackService extends Service {
         if (BuildConfig.DEBUG)
             Log.d(TAG, "Handling keycode: " + keycode);
 
-        final PlayerStatus status = mediaPlayer.getPSMPInfo().playerStatus;
+        final PlaybackServiceMediaPlayer.PSMPInfo info = mediaPlayer.getPSMPInfo();
+        final PlayerStatus status = info.playerStatus;
         switch (keycode) {
             case KeyEvent.KEYCODE_HEADSETHOOK:
             case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
@@ -310,14 +320,20 @@ public class PlaybackService extends Service {
                     mediaPlayer.pause(true, true);
                 }
                 break;
-            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: {
-                mediaPlayer.seekDelta(PlaybackController.DEFAULT_SEEK_DELTA);
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                mediaPlayer.seekDelta(UserPreferences.getSeekDeltaMs());
                 break;
-            }
-            case KeyEvent.KEYCODE_MEDIA_REWIND: {
-                mediaPlayer.seekDelta(-PlaybackController.DEFAULT_SEEK_DELTA);
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+            case KeyEvent.KEYCODE_MEDIA_REWIND:
+                mediaPlayer.seekDelta(-UserPreferences.getSeekDeltaMs());
                 break;
-            }
+            default:
+                if (info.playable != null && info.playerStatus == PlayerStatus.PLAYING) {   // only notify the user about an unknown key event if it is actually doing something
+                    String message = String.format(getResources().getString(R.string.unknown_media_key), keycode);
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                }
+                break;
         }
     }
 
@@ -502,6 +518,11 @@ public class PlaybackService extends Service {
                 DBWriter.removeQueueItem(PlaybackService.this, item.getId(), true);
             }
             DBWriter.addItemToPlaybackHistory(PlaybackService.this, (FeedMedia) media);
+
+            // auto-flattr if enabled
+            if (isAutoFlattrable(media) && UserPreferences.getAutoFlattrPlayedDurationThreshold() == 1.0f) {
+                DBTasks.flattrItemIfLoggedIn(PlaybackService.this, item);
+            }
         }
 
         // Load next episode if previous episode was in the queue and if there
@@ -662,11 +683,16 @@ public class PlaybackService extends Service {
                     Log.d(TAG, "Starting background work");
                 if (android.os.Build.VERSION.SDK_INT >= 11) {
                     if (info.playable != null) {
-                        int iconSize = getResources().getDimensionPixelSize(
-                                android.R.dimen.notification_large_icon_width);
-                        icon = BitmapDecoder
-                                .decodeBitmapFromWorkerTaskResource(iconSize,
-                                        info.playable);
+                        try {
+                            int iconSize = getResources().getDimensionPixelSize(
+                                    android.R.dimen.notification_large_icon_width);
+                            icon = PicassoProvider.getMediaMetadataPicassoInstance(PlaybackService.this)
+                                    .load(info.playable.getImageUri())
+                                    .resize(iconSize, iconSize)
+                                    .get();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
 
                 }
@@ -750,21 +776,21 @@ public class PlaybackService extends Service {
             if (updatePlayedDuration && playable instanceof FeedMedia) {
                 FeedMedia m = (FeedMedia) playable;
                 FeedItem item = m.getItem();
-                m.setPlayedDuration(m.getPlayedDuration() + ((int)(deltaPlayedDuration * playbackSpeed)));
+                m.setPlayedDuration(m.getPlayedDuration() + ((int) (deltaPlayedDuration * playbackSpeed)));
                 // Auto flattr
-                if (FlattrUtils.hasToken() && UserPreferences.isAutoFlattr() && item.getPaymentLink() != null && item.getFlattrStatus().getUnflattred() &&
-                        (m.getPlayedDuration() > UserPreferences.getPlayedDurationAutoflattrThreshold() * duration)) {
+                if (isAutoFlattrable(m) &&
+                        (m.getPlayedDuration() > UserPreferences.getAutoFlattrPlayedDurationThreshold() * duration)) {
 
                     if (BuildConfig.DEBUG)
                         Log.d(TAG, "saveCurrentPosition: performing auto flattr since played duration " + Integer.toString(m.getPlayedDuration())
-                                + " is " + UserPreferences.getPlayedDurationAutoflattrThreshold() * 100 + "% of file duration " + Integer.toString(duration));
-                    item.getFlattrStatus().setFlattrQueue();
-                    DBWriter.setFeedItemFlattrStatus(PodcastApp.getInstance(), item, false);
+                                + " is " + UserPreferences.getAutoFlattrPlayedDurationThreshold() * 100 + "% of file duration " + Integer.toString(duration));
+                    DBTasks.flattrItemIfLoggedIn(this, item);
                 }
             }
             playable.saveCurrentPosition(PreferenceManager
-                    .getDefaultSharedPreferences(getApplicationContext()),
-                    position);
+                            .getDefaultSharedPreferences(getApplicationContext()),
+                    position
+            );
         }
     }
 
@@ -889,8 +915,7 @@ public class PlaybackService extends Service {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction() != null &&
-                    intent.getAction().equals(Intent.ACTION_HEADSET_PLUG)) {
+            if (StringUtils.equals(intent.getAction(), Intent.ACTION_HEADSET_PLUG)) {
                 int state = intent.getIntExtra("state", -1);
                 if (state != -1) {
                     if (BuildConfig.DEBUG)
@@ -932,8 +957,7 @@ public class PlaybackService extends Service {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction() != null &&
-                    intent.getAction().equals(ACTION_SHUTDOWN_PLAYBACK_SERVICE)) {
+            if (StringUtils.equals(intent.getAction(), ACTION_SHUTDOWN_PLAYBACK_SERVICE)) {
                 stopSelf();
             }
         }
@@ -943,8 +967,7 @@ public class PlaybackService extends Service {
     private BroadcastReceiver skipCurrentEpisodeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction() != null &&
-                    intent.getAction().equals(ACTION_SKIP_CURRENT_EPISODE)) {
+            if (StringUtils.equals(intent.getAction(), ACTION_SKIP_CURRENT_EPISODE)) {
                 if (BuildConfig.DEBUG)
                     Log.d(TAG, "Received SKIP_CURRENT_EPISODE intent");
                 mediaPlayer.endPlayback();
@@ -1045,4 +1068,13 @@ public class PlaybackService extends Service {
         return mediaPlayer.getVideoSize();
     }
 
+    private boolean isAutoFlattrable(Playable p) {
+        if (p != null && p instanceof FeedMedia) {
+            FeedMedia media = (FeedMedia) p;
+            FeedItem item = ((FeedMedia) p).getItem();
+            return item != null && FlattrUtils.hasToken() && UserPreferences.isAutoFlattr() && item.getPaymentLink() != null && item.getFlattrStatus().getUnflattred();
+        } else {
+            return false;
+        }
+    }
 }

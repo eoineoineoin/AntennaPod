@@ -11,7 +11,7 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
 import de.danoeh.antennapod.R;
-import de.danoeh.antennapod.asynctask.ImageLoader;
+import de.danoeh.antennapod.asynctask.PicassoProvider;
 import de.danoeh.antennapod.feed.Feed;
 
 /**
@@ -110,7 +110,7 @@ public class NavListAdapter extends BaseAdapter {
             LayoutInflater inflater = (LayoutInflater) context
                     .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 
-            convertView = inflater.inflate(R.layout.nav_listitem, null);
+            convertView = inflater.inflate(R.layout.nav_listitem, parent, false);
 
             holder.title = (TextView) convertView.findViewById(R.id.txtvTitle);
             holder.count = (TextView) convertView.findViewById(R.id.txtvCount);
@@ -154,7 +154,7 @@ public class NavListAdapter extends BaseAdapter {
             LayoutInflater inflater = (LayoutInflater) context
                     .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 
-            convertView = inflater.inflate(R.layout.nav_section_item, null);
+            convertView = inflater.inflate(R.layout.nav_section_item, parent, false);
 
             holder.title = (TextView) convertView.findViewById(R.id.txtvTitle);
             convertView.setTag(holder);
@@ -179,7 +179,7 @@ public class NavListAdapter extends BaseAdapter {
             LayoutInflater inflater = (LayoutInflater) context
                     .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 
-            convertView = inflater.inflate(R.layout.nav_feedlistitem, null);
+            convertView = inflater.inflate(R.layout.nav_feedlistitem, parent, false);
 
             holder.title = (TextView) convertView.findViewById(R.id.txtvTitle);
             holder.image = (ImageView) convertView.findViewById(R.id.imgvCover);
@@ -189,7 +189,11 @@ public class NavListAdapter extends BaseAdapter {
         }
 
         holder.title.setText(feed.getTitle());
-        ImageLoader.getInstance().loadThumbnailBitmap(feed.getImage(), holder.image, (int) context.getResources().getDimension(R.dimen.thumbnail_length_navlist));
+
+        PicassoProvider.getDefaultPicassoInstance(context)
+                .load(feed.getImageUri())
+                .fit()
+                .into(holder.image);
 
         return convertView;
     }

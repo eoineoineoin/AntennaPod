@@ -3,10 +3,10 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:0.11.+'
+        classpath 'com.android.tools.build:gradle:0.12.+'
     }
 }
-apply plugin: 'android'
+apply plugin: 'com.android.application'
 
 repositories {
     mavenCentral()
@@ -29,12 +29,20 @@ dependencies {
     compile 'com.nineoldandroids:library:2.4.0'
     compile project(':submodules:dslv:library')
 
-    compile 'com.jayway.android.robotium:robotium-solo:5.1'
+    compile 'com.jayway.android.robotium:robotium-solo:5.2.1'
+    compile ("com.doomonafireball.betterpickers:library:1.5.2") {
+        exclude group: 'com.android.support', module: 'support-v4'
+    }
+    compile 'org.jsoup:jsoup:1.7.3'
+    compile 'com.squareup.picasso:picasso:2.3.+'
+    compile 'com.squareup.okhttp:okhttp:2.0.+'
+    compile 'com.squareup.okhttp:okhttp-urlconnection:2.0.0'
+    compile 'com.squareup.okio:okio:1.0.0'
 }
 
 android {
     compileSdkVersion 19
-    buildToolsVersion "19.1.0"
+    buildToolsVersion "20.0"
 
     defaultConfig {
         minSdkVersion 10
@@ -81,13 +89,23 @@ android {
     }
 
     buildTypes {
+        def STRING = "String"
+        def FLATTR_APP_KEY = "FLATTR_APP_KEY"
+        def FLATTR_APP_SECRET = "FLATTR_APP_SECRET"
+        def mFlattrAppKey = (project.hasProperty('flattrAppKey')) ? flattrAppKey : "\"\""
+        def mFlattrAppSecret = (project.hasProperty('flattrAppSecret')) ? flattrAppSecret : "\"\""
+
         debug {
             applicationIdSuffix ".debug"
+            buildConfigField STRING, FLATTR_APP_KEY, mFlattrAppKey
+            buildConfigField STRING, FLATTR_APP_SECRET, mFlattrAppSecret
         }
         release {
             runProguard true
             proguardFile 'proguard.cfg'
             signingConfig signingConfigs.releaseConfig
+            buildConfigField STRING, FLATTR_APP_KEY, mFlattrAppKey
+            buildConfigField STRING, FLATTR_APP_SECRET, mFlattrAppSecret
         }
     }
 
@@ -98,6 +116,11 @@ android {
 
     lintOptions {
         abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
     }
 }
 
