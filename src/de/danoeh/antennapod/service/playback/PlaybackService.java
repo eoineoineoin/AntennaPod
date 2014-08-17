@@ -2,6 +2,7 @@ package de.danoeh.antennapod.service.playback;
 
 import android.annotation.SuppressLint;
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
@@ -143,7 +144,8 @@ public class PlaybackService extends Service {
      */
     public static boolean started = false;
 
-    private static final int NOTIFICATION_ID = 1;
+    private static final int PLAYING_NOTIFICATION_ID = 1;
+    private static final int PAUSED_NOTIFICATION_ID = 2;
 
     private RemoteControlClient remoteControlClient;
     private PlaybackServiceMediaPlayer mediaPlayer;
@@ -401,6 +403,7 @@ public class PlaybackService extends Service {
                     taskManager.cancelPositionSaver();
                     saveCurrentPosition(false, 0);
                     taskManager.cancelWidgetUpdater();
+                    stopForeground(true);
                     setupNotification(newInfo);
                     break;
 
@@ -712,12 +715,11 @@ public class PlaybackService extends Service {
                     String contentTitle = info.playable.getEpisodeTitle();
                     Notification notification = null;
                     if (android.os.Build.VERSION.SDK_INT >= 16) {
-
+                        NotificationManager manager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
                         Notification.Builder notificationBuilder = new Notification.Builder(
                                 PlaybackService.this)
                                 .setContentTitle(contentTitle)
                                 .setContentText(contentText)
-                                .setOngoing(true)
                                 .setContentIntent(pIntent)
                                 .setLargeIcon(icon)
                                 .setSmallIcon(R.drawable.ic_stat_antenna);
@@ -733,9 +735,13 @@ public class PlaybackService extends Service {
                                             pauseButtonIntent,
                                             PendingIntent.FLAG_UPDATE_CURRENT);
                             notificationBuilder
+                                    .setOngoing(true)
                                     .addAction(android.R.drawable.ic_media_pause,
                                             getString(R.string.pause_label),
                                             pauseButtonPendingIntent);
+                            notification = notificationBuilder.build();
+                            manager.cancel(PAUSED_NOTIFICATION_ID);
+                            startForeground(PLAYING_NOTIFICATION_ID, notification);
                         } else if(info.playerStatus == PlayerStatus.PAUSED) {
                             Intent playButtonIntent = new Intent(
                                     PlaybackService.this, PlaybackService.class);
@@ -747,11 +753,15 @@ public class PlaybackService extends Service {
                                             playButtonIntent,
                                             PendingIntent.FLAG_UPDATE_CURRENT);
                             notificationBuilder
+                                    .setAutoCancel(true)
+                                    .setOngoing(false)
                                     .addAction(android.R.drawable.ic_media_play,
                                             getString(R.string.play_label),
                                             playButtonPendingIntent);
+                            notification = notificationBuilder.build();
+                            manager.cancel(PLAYING_NOTIFICATION_ID);
+                            manager.notify(PAUSED_NOTIFICATION_ID, notification);
                         }
-                        notification = notificationBuilder.build();
                     } else if(info.playerStatus == PlayerStatus.PLAYING) {
                         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(
                                 PlaybackService.this)
@@ -760,9 +770,8 @@ public class PlaybackService extends Service {
                                 .setContentIntent(pIntent).setLargeIcon(icon)
                                 .setSmallIcon(R.drawable.ic_stat_antenna);
                         notification = notificationBuilder.getNotification();
+                        startForeground(PLAYING_NOTIFICATION_ID, notification);
                     }
-                    if(notification != null)
-                        startForeground(NOTIFICATION_ID, notification);
                     if (BuildConfig.DEBUG)
                         Log.d(TAG, "Notification set up");
                 }
