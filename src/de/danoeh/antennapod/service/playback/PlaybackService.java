@@ -401,7 +401,7 @@ public class PlaybackService extends Service {
                     taskManager.cancelPositionSaver();
                     saveCurrentPosition(false, 0);
                     taskManager.cancelWidgetUpdater();
-                    stopForeground(true);
+                    setupNotification(newInfo);
                     break;
 
                 case STOPPED:
@@ -707,21 +707,12 @@ public class PlaybackService extends Service {
             @Override
             protected void onPostExecute(Void result) {
                 super.onPostExecute(result);
-                if (!isCancelled() && info.playerStatus == PlayerStatus.PLAYING
-                        && info.playable != null) {
+                if (!isCancelled() && info.playable != null) {
                     String contentText = info.playable.getFeedTitle();
                     String contentTitle = info.playable.getEpisodeTitle();
                     Notification notification = null;
                     if (android.os.Build.VERSION.SDK_INT >= 16) {
-                        Intent pauseButtonIntent = new Intent(
-                                PlaybackService.this, PlaybackService.class);
-                        pauseButtonIntent.putExtra(
-                                MediaButtonReceiver.EXTRA_KEYCODE,
-                                KeyEvent.KEYCODE_MEDIA_PAUSE);
-                        PendingIntent pauseButtonPendingIntent = PendingIntent
-                                .getService(PlaybackService.this, 0,
-                                        pauseButtonIntent,
-                                        PendingIntent.FLAG_UPDATE_CURRENT);
+
                         Notification.Builder notificationBuilder = new Notification.Builder(
                                 PlaybackService.this)
                                 .setContentTitle(contentTitle)
@@ -729,12 +720,39 @@ public class PlaybackService extends Service {
                                 .setOngoing(true)
                                 .setContentIntent(pIntent)
                                 .setLargeIcon(icon)
-                                .setSmallIcon(R.drawable.ic_stat_antenna)
-                                .addAction(android.R.drawable.ic_media_pause,
-                                        getString(R.string.pause_label),
-                                        pauseButtonPendingIntent);
+                                .setSmallIcon(R.drawable.ic_stat_antenna);
+
+                        if(info.playerStatus == PlayerStatus.PLAYING) {
+                            Intent pauseButtonIntent = new Intent(
+                                    PlaybackService.this, PlaybackService.class);
+                            pauseButtonIntent.putExtra(
+                                    MediaButtonReceiver.EXTRA_KEYCODE,
+                                    KeyEvent.KEYCODE_MEDIA_PAUSE);
+                            PendingIntent pauseButtonPendingIntent = PendingIntent
+                                    .getService(PlaybackService.this, 0,
+                                            pauseButtonIntent,
+                                            PendingIntent.FLAG_UPDATE_CURRENT);
+                            notificationBuilder
+                                    .addAction(android.R.drawable.ic_media_pause,
+                                            getString(R.string.pause_label),
+                                            pauseButtonPendingIntent);
+                        } else if(info.playerStatus == PlayerStatus.PAUSED) {
+                            Intent playButtonIntent = new Intent(
+                                    PlaybackService.this, PlaybackService.class);
+                            playButtonIntent.putExtra(
+                                    MediaButtonReceiver.EXTRA_KEYCODE,
+                                    KeyEvent.KEYCODE_MEDIA_PLAY);
+                            PendingIntent playButtonPendingIntent = PendingIntent
+                                    .getService(PlaybackService.this, 0,
+                                            playButtonIntent,
+                                            PendingIntent.FLAG_UPDATE_CURRENT);
+                            notificationBuilder
+                                    .addAction(android.R.drawable.ic_media_play,
+                                            getString(R.string.play_label),
+                                            playButtonPendingIntent);
+                        }
                         notification = notificationBuilder.build();
-                    } else {
+                    } else if(info.playerStatus == PlayerStatus.PLAYING) {
                         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(
                                 PlaybackService.this)
                                 .setContentTitle(contentTitle)
@@ -743,7 +761,8 @@ public class PlaybackService extends Service {
                                 .setSmallIcon(R.drawable.ic_stat_antenna);
                         notification = notificationBuilder.getNotification();
                     }
-                    startForeground(NOTIFICATION_ID, notification);
+                    if(notification != null)
+                        startForeground(NOTIFICATION_ID, notification);
                     if (BuildConfig.DEBUG)
                         Log.d(TAG, "Notification set up");
                 }
